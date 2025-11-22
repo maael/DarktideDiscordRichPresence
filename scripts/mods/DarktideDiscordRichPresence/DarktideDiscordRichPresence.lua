@@ -1,7 +1,5 @@
 local mod = get_mod("DarktideDiscordRichPresence")
-local has_ffi, err = pcall(require, "ffi")
-local has_jutil, jutil = pcall(require, "jit.util")
-local has_os, os = pcall(require "os")
+local BackendUtilities = require("scripts/foundation/managers/backend/utilities/backend_utilities")
 
 mod._debug_mode = mod:get("enable_debug_mode")
 
@@ -13,12 +11,18 @@ mod.debug = {
     end
 }
 
+local binaries_path_handle = Mods.lua.io.popen("cd")
+local binaries_path = binaries_path_handle:read()
+binaries_path_handle:close()
+local bin_path = table.concat({
+	binaries_path:gsub("binaries", "mods"),
+	mod:get_name(),
+	"bin",
+}, "\\")
+mod:notify(string.format('Running "%s\\start-server.bat"', bin_path))
+Mods.lua.io.popen(string.format('"%s\\start-server.bat"', bin_path)):close()
+
 mod:notify("Loaded Darktide Discord")
-
-mod:notify("Plugin version: %s", DarktideDiscord and DarktideDiscord.VERSION)
-
-mod:notify("FFI: %s %s, JIT: %s", has_ffi, err, has_jutil)
-mod:notify("WINDOWS: %s, BUILD: %s, EXECUTE: %s", IS_WINDOWS, BUILD, "???")
 
 mod.on_setting_changed = function(id)
     mod._debug_mode = mod:get("enable_debug_mode")
@@ -85,6 +89,34 @@ mod.set_state = function (self, state)
 
   mod._game_state = state
   if mod._debug_mode then
-    mod:notify("%s (%s) the %s is %s", mod._player_name, mod._player_level, mod:localize(mod._player_archetype), mod:localize(mod._game_state))
+    local state_string = string.format("%s", mod:localize(mod._game_state))
+    local details_string = string.format("%s (%s) the %s", mod._player_name, mod._player_level, mod:localize(mod._player_archetype))
+    mod:set_discord_state(state_string, details_string)
   end
+end
+
+mod.set_discord_state = function(self, state_string, details_string)
+  mod:notify("Setting discord state")
+  Managers.backend:url_request("localhost:3923/presence/set", {
+    method = "POST",
+    body = {
+      state = tostring(state_string),
+      details = tostring(details_string),
+      large_image = "large",
+      large_text = "Hover text!"
+    }
+  })
+  mod:notify("Set discord state")
+end
+
+mod.on_all_mods_loaded = function()
+  mod:notify("Loaded all mods...")
+  mod:set_discord_state("In Mod Menu", "Testing discord plugin")
+  mod:notify("Sent discord state")
+end
+
+mod.on_unload = function (exit_game)
+  Managers.backend:url_request("localhost:3923/presence/clear", {
+    method = "POST"
+  })
 end
