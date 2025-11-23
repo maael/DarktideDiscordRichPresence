@@ -1,3 +1,6 @@
 bin/logs
 discord-presence-server-src/config.json
 discord-presence-server-src/discord-presence-server.spec
+discord-presence-server-src/dist
+discord-presence-server-src/logs
+discord-presence-server-src/build

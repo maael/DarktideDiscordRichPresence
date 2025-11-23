@@ -28,3 +28,12 @@ curl -Method POST `
 ```
 curl -Method POST http://127.0.0.1:3923/presence/clear
 ```
+
+## Notes
+
+- Hosts a simple http server to allow publishing to Discord Rich Presence via Pypresence
+- Watches for `Darktide.exe` to know when to exit
+
+## Known issues
+
+- Terminal window opens, likely when server is handling request

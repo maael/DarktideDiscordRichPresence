@@ -3,9 +3,11 @@ import os
 import sys
 import time
 import traceback
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from socketserver import ThreadingMixIn
-from pypresence import Presence
+from http.server import BaseHTTPRequestHandler, SimpleHTTPRequestHandler
+import socketserver
+from pypresence import Presence # pyright: ignore[reportMissingImports]
+import threading
+import subprocess
 
 # -------------------------------
 # Logging
@@ -22,6 +24,7 @@ def get_logs_dir():
     return logs
 
 LOG_FILE = os.path.join(get_logs_dir(), "server.log")
+open(LOG_FILE, "w").close()
 
 def log(msg):
     timestamp = time.strftime("[%Y-%m-%d %H:%M:%S]")
@@ -45,19 +48,10 @@ rpc = Presence(config["client_id"])
 rpc.connect()
 log("Discord RPC connected successfully.")
 
-
-# -------------------------------
-# Threaded server to avoid hangs
-# -------------------------------
-class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
-    daemon_threads = True
-
-
 # -------------------------------
 # HTTP Handler
 # -------------------------------
 class Handler(BaseHTTPRequestHandler):
-
     def log_message(self, format, *args):
         # Override default stderr logging (invisible in --noconsole)
         log("HTTP: " + format % args)
@@ -118,6 +112,26 @@ class Handler(BaseHTTPRequestHandler):
             log(traceback.format_exc())
             self._json({"error": str(e)}, 500)
 
+# # -------------------------------
+# # Process watching
+# # -------------------------------
+
+PROCESS_NAME = "Darktide.exe"
+
+def is_process_running(name: str) -> bool:
+    result = subprocess.run(["tasklist"], capture_output=True, text=True)
+    return name.lower() in result.stdout.lower()
+
+def watch_process():
+    log("Process watcher started.")
+    running = True
+    while running:
+        if not is_process_running(PROCESS_NAME):
+            log(f"Process '{PROCESS_NAME}' not found.")
+            running = False
+        else:
+            running = True
+            time.sleep(5)
 
 # -------------------------------
 # Start server
@@ -125,8 +139,24 @@ class Handler(BaseHTTPRequestHandler):
 def run():
     port = config.get("port", 3923)
     log(f"Starting threaded server on port {port}")
-    httpd = ThreadedHTTPServer(("127.0.0.1", port), Handler)
-    httpd.serve_forever()
+
+    # Start background watcher
+    watcher = threading.Thread(target=watch_process, daemon=True)
+    watcher.start()
+
+    # Start server
+    httpd = socketserver.TCPServer(("127.0.0.1", port), Handler)
+    httpd.timeout = 5
+    log("HTTP server thread started.")
+    while watcher.is_alive():
+        httpd.handle_request()
+
+    log("Shutting down...")
+
+    rpc.clear()
+    rpc.close()
+
+    log("Exited")
 
 if __name__ == "__main__":
     try:
