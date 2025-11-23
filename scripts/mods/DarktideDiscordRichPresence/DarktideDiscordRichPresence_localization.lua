@@ -27,30 +27,30 @@ return {
 		en = "in Mission Intro"
 	},
 	state_viewing_inventory = {
-		en = "viewing inventory"
+		en = "Viewing their inventory"
 	},
 	state_viewing_cosmetics = {
-		en = "viewing cosmetics"
+		en = "Viewing their cosmetics"
 	},
 	state_viewing_talents = {
-		en = "viewing talents"
+		en = "Viewing talents"
 	},
 	state_shopping = {
-		en = "shopping at Melk's"
+		en = "Shopping at Melk's"
 	},
 	state_choosing_class = {
-		en = "choosing a class"
+		en = "Choosing a class"
 	},
 	state_viewing_missions = {
-		en = "viewing missions"
+		en = "Viewing missions"
 	},
 	state_morningstar = {
-		en = "killing time on the Morningstar"
+		en = "Killing time on the Morningstar"
 	},
 	state_meat_grinder = {
-		en = "practicing in the Meat Grinder"
+		en = "Practicing in the Meat Grinder"
 	},
 	state_mission = {
-		en = "in a mission"
+		en = "In a mission"
 	}
 }

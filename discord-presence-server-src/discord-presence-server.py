@@ -119,7 +119,15 @@ class Handler(BaseHTTPRequestHandler):
 PROCESS_NAME = "Darktide.exe"
 
 def is_process_running(name: str) -> bool:
-    result = subprocess.run(["tasklist"], capture_output=True, text=True)
+    startupinfo = subprocess.STARTUPINFO()
+    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    result = subprocess.run(
+        ["tasklist"],
+        startupinfo=startupinfo,
+        creationflags=subprocess.CREATE_NO_WINDOW,
+        capture_output=True,
+        text=True
+    )
     return name.lower() in result.stdout.lower()
 
 def watch_process():

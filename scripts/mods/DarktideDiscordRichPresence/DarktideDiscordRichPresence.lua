@@ -77,6 +77,7 @@ mod:hook(CLASS.StateGameplay, "on_enter", function(func, self, parent, params, c
 end)
 
 mod.set_state = function (self, state)
+  mod:notify(string.format("mod:set_state(%s)", state))
   local player = Managers.player:local_player(1)
   if player then
     mod._player_name = player:name()
@@ -84,35 +85,37 @@ mod.set_state = function (self, state)
     if profile then
       mod._player_archetype = profile.archetype and profile.archetype.name
       mod._player_level = profile.current_level
+
+      local TrueLevel = get_mod("true_level")
+      if TrueLevel then
+        local true_levels = TrueLevel.get_true_levels(profile.character_id)
+        if true_levels then
+          mod._player_level = true_levels.true_level
+        end
+      end
     end
   end
 
   mod._game_state = state
-  if mod._debug_mode then
-    local state_string = string.format("%s", mod:localize(mod._game_state))
-    local details_string = string.format("%s (%s) the %s", mod._player_name, mod._player_level, mod:localize(mod._player_archetype))
-    mod:set_discord_state(state_string, details_string)
-  end
+  local state_string = string.format("%s", mod:localize(mod._game_state))
+  local details_string = string.format("%s - %s - %s", mod._player_name, mod._player_level, mod:localize(mod._player_archetype))
+  mod:set_discord_state(state_string, details_string)
 end
 
 mod.set_discord_state = function(self, state_string, details_string)
-  mod:notify("Setting discord state")
   Managers.backend:url_request("localhost:3923/presence/set", {
     method = "POST",
     body = {
       state = tostring(state_string),
       details = tostring(details_string),
-      large_image = "large",
-      large_text = "Hover text!"
+      large_image = "logo"
     }
   })
-  mod:notify("Set discord state")
+  mod:notify(string.format("Set discord state: %s - %s", tostring(state_string), tostring(details_string)))
 end
 
 mod.on_all_mods_loaded = function()
-  mod:notify("Loaded all mods...")
   mod:set_discord_state("In Mod Menu", "Testing discord plugin")
-  mod:notify("Sent discord state")
 end
 
 mod.on_unload = function (exit_game)
