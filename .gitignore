@@ -4,3 +4,6 @@ discord-presence-server-src/discord-presence-server.spec
 discord-presence-server-src/dist
 discord-presence-server-src/logs
 discord-presence-server-src/build
+discord-presence-server-src/discord-presence-server.build
+discord-presence-server-src/discord-presence-server.dist
+discord-presence-server-src/discord-presence-server.onefile-build

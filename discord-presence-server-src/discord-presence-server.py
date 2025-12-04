@@ -17,20 +17,9 @@ def get_base_dir():
         return sys._MEIPASS
     return os.path.dirname(os.path.abspath(__file__))
 
-def get_logs_dir():
-    base = os.path.dirname(os.path.abspath(sys.argv[0]))
-    logs = os.path.join(base, "logs")
-    os.makedirs(logs, exist_ok=True)
-    return logs
-
-LOG_FILE = os.path.join(get_logs_dir(), "server.log")
-open(LOG_FILE, "w").close()
-
 def log(msg):
     timestamp = time.strftime("[%Y-%m-%d %H:%M:%S]")
-    with open(LOG_FILE, "a", encoding="utf-8") as f:
-        f.write(f"{timestamp} {msg}\n")
-
+    print(f"{timestamp} {msg}")
 
 # -------------------------------
 # Config + Discord RPC
@@ -41,6 +30,8 @@ def load_config():
     log(f"Loading config from: {cfg_path}")
     with open(cfg_path, "r", encoding="utf-8") as f:
         return json.load(f)
+
+POLL_INTERVAL = 5
 
 config = load_config()
 
@@ -139,7 +130,7 @@ def watch_process():
             running = False
         else:
             running = True
-            time.sleep(5)
+            time.sleep(POLL_INTERVAL)
 
 # -------------------------------
 # Start server
@@ -154,7 +145,7 @@ def run():
 
     # Start server
     httpd = socketserver.TCPServer(("127.0.0.1", port), Handler)
-    httpd.timeout = 5
+    httpd.timeout = POLL_INTERVAL
     log("HTTP server thread started.")
     while watcher.is_alive():
         httpd.handle_request()

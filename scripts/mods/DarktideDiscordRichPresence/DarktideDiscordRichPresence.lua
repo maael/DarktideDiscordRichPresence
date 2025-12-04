@@ -90,7 +90,7 @@ mod.set_state = function (self, state)
       if TrueLevel then
         local true_levels = TrueLevel.get_true_levels(profile.character_id)
         if true_levels then
-          mod._player_level = true_levels.true_level
+          mod._player_level = true_levels.true_level or profile.current_level
         end
       end
     end

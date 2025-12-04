@@ -1,3 +1,3 @@
 @echo off
 cd ..
-start "" "%cd%\mods\DarktideDiscordRichPresence\bin\discord-presence-server.exe"
+start "" "%cd%\mods\DarktideDiscordRichPresence\bin\server\discord-presence-server.exe"
