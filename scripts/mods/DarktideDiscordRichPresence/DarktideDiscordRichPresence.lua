@@ -21,8 +21,6 @@ local bin_path = table.concat({
 local bat_path = string.format('"%s\\start-server.bat"', bin_path)
 Mods.lua.io.popen(bat_path):close()
 
-mod:notify("Loaded Darktide Discord")
-
 mod.on_setting_changed = function(id)
     if id == "enable_debug_mode" then
       mod._debug_mode = mod:get("enable_debug_mode")
