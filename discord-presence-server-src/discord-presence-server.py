@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import sys
 import time
@@ -8,6 +9,12 @@ import socketserver
 from pypresence import Presence # pyright: ignore[reportMissingImports]
 import threading
 import subprocess
+
+logging.basicConfig(
+    filename="server.log",
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 # -------------------------------
 # Logging
@@ -20,16 +27,25 @@ def get_base_dir():
 def log(msg):
     timestamp = time.strftime("[%Y-%m-%d %H:%M:%S]")
     print(f"{timestamp} {msg}")
+    logging.info(msg)
 
 # -------------------------------
 # Config + Discord RPC
 # -------------------------------
 def load_config():
+    fallback = {
+        "port": 3923,
+        "client_id": "1440090558763761860"
+    }
     base_dir = get_base_dir()
     cfg_path = os.path.join(base_dir, "config.json")
     log(f"Loading config from: {cfg_path}")
-    with open(cfg_path, "r", encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except:
+        log("Couldn't read config, using fallback")
+        return fallback
 
 POLL_INTERVAL = 5
 
@@ -110,27 +126,45 @@ class Handler(BaseHTTPRequestHandler):
 PROCESS_NAME = "Darktide.exe"
 
 def is_process_running(name: str) -> bool:
-    startupinfo = subprocess.STARTUPINFO()
-    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-    result = subprocess.run(
-        ["tasklist"],
-        startupinfo=startupinfo,
-        creationflags=subprocess.CREATE_NO_WINDOW,
-        capture_output=True,
-        text=True
-    )
-    return name.lower() in result.stdout.lower()
+    try:
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        result = subprocess.run(
+            ["tasklist"],
+            startupinfo=startupinfo,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+            stdin=subprocess.DEVNULL,      # <<< IMPORTANT
+            stdout=subprocess.PIPE,        # instead of capture_output=True
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,   # don't raise on non-zero exit
+        )
+        if result.returncode != 0:
+            log(f"tasklist failed with code {result.returncode}: {result.stderr!r}")
+            return False
+
+        found = name.lower() in result.stdout.lower()
+        log(f"is_process_running('{name}') -> {found}")
+        return found
+
+    except Exception as e:
+        log(f"ERROR in is_process_running: {e!r}")
+        log(traceback.format_exc())
+        # Decide how you want to handle a failure; probably safest:
+        return False
 
 def watch_process():
-    log("Process watcher started.")
-    running = True
-    while running:
+    log("Process watcher started 2.")
+    misses = 0
+    while True:
         if not is_process_running(PROCESS_NAME):
-            log(f"Process '{PROCESS_NAME}' not found.")
-            running = False
+            misses += 1
+            log(f"Process '{PROCESS_NAME}' not found (miss {misses}).")
+            if misses >= 3:   # e.g. 3 consecutive misses
+                break
         else:
-            running = True
-            time.sleep(POLL_INTERVAL)
+            misses = 0
+        time.sleep(POLL_INTERVAL)
 
 # -------------------------------
 # Start server
@@ -149,6 +183,8 @@ def run():
     log("HTTP server thread started.")
     while watcher.is_alive():
         httpd.handle_request()
+
+    log(f"Watcher is alive?: {watcher.is_alive()}")
 
     log("Shutting down...")
 

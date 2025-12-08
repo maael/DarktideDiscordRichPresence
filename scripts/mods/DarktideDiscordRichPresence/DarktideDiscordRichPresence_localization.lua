@@ -8,6 +8,9 @@ return {
 	enable_debug_mode = {
 		en = "Enable debug mode"
 	},
+	toggle_server = {
+		en = "Toggle server"
+	},
 	ogryn = {
 		en = "Ogryn"
 	},
@@ -22,6 +25,9 @@ return {
 	},
 	adamant = {
 		en = "Arbitrator"
+	},
+	broker = {
+		en = "Hive Scum"
 	},
 	state_mission_intro = {
 		en = "in Mission Intro"

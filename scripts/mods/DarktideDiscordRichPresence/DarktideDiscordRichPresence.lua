@@ -1,5 +1,4 @@
 local mod = get_mod("DarktideDiscordRichPresence")
-local BackendUtilities = require("scripts/foundation/managers/backend/utilities/backend_utilities")
 
 mod._debug_mode = mod:get("enable_debug_mode")
 
@@ -19,13 +18,20 @@ local bin_path = table.concat({
 	mod:get_name(),
 	"bin",
 }, "\\")
-mod:notify(string.format('Running "%s\\start-server.bat"', bin_path))
-Mods.lua.io.popen(string.format('"%s\\start-server.bat"', bin_path)):close()
+local bat_path = string.format('"%s\\start-server.bat"', bin_path)
+-- mod:notify("Running %s", bat_path)
+-- Mods.lua.io.popen(bat_path):close()
 
 mod:notify("Loaded Darktide Discord")
 
 mod.on_setting_changed = function(id)
-    mod._debug_mode = mod:get("enable_debug_mode")
+    if id == "enable_debug_mode" then
+      mod._debug_mode = mod:get("enable_debug_mode")
+    elseif id == "toggle_server" then
+      mod:notify("Running %s", bat_path)
+      Mods.lua.io.popen(bat_path):close()
+      mod:notify("Ran %s", bat_path)
+    end
 
     mod:notify("Changed setting: %s %s", id, mod._debug_mode)
 end
@@ -103,23 +109,32 @@ mod.set_state = function (self, state)
 end
 
 mod.set_discord_state = function(self, state_string, details_string)
-  Managers.backend:url_request("localhost:3923/presence/set", {
-    method = "POST",
-    body = {
-      state = tostring(state_string),
-      details = tostring(details_string),
-      large_image = "logo"
-    }
-  })
-  mod:notify(string.format("Set discord state: %s - %s", tostring(state_string), tostring(details_string)))
+  if Managers then
+    Managers.backend:url_request("localhost:3923/presence/set", {
+      method = "POST",
+      body = {
+        state = tostring(state_string),
+        details = tostring(details_string),
+        large_image = "logo"
+      }
+    })
+  end
+  if mod._debug_mode then
+    mod:notify(string.format("Set discord state: %s - %s", tostring(state_string), tostring(details_string)))
+  end
 end
 
 mod.on_all_mods_loaded = function()
-  mod:set_discord_state("In Mod Menu", "Testing discord plugin")
+  mod:set_discord_state("In Menu", "Choosing operative")
 end
 
 mod.on_unload = function (exit_game)
-  Managers.backend:url_request("localhost:3923/presence/clear", {
-    method = "POST"
-  })
+  if Managers then
+    Managers.backend:url_request("localhost:3923/presence/clear", {
+      method = "POST"
+    })
+  end
+  if mod._debug_mode then
+    mod:notify("Clearing presence")
+  end
 end
