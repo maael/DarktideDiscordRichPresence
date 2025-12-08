@@ -1,5 +1,4 @@
 import json
-import logging
 import os
 import sys
 import time
@@ -9,12 +8,6 @@ import socketserver
 from pypresence import Presence # pyright: ignore[reportMissingImports]
 import threading
 import subprocess
-
-logging.basicConfig(
-    filename="server.log",
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
 
 # -------------------------------
 # Logging
@@ -27,7 +20,6 @@ def get_base_dir():
 def log(msg):
     timestamp = time.strftime("[%Y-%m-%d %H:%M:%S]")
     print(f"{timestamp} {msg}")
-    logging.info(msg)
 
 # -------------------------------
 # Config + Discord RPC
