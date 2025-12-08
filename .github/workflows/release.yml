@@ -1,0 +1,235 @@
+name: Create or Update Release
+run-name: "Release v${{ github.event.inputs.version }} ${{ github.event.inputs.dry_run == 'true' && '[dry-run]' || '' }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. 1.2.3)"
+        required: true
+        type: string
+      dry_run:
+        description: "Dry run (do everything except actually create/update the GitHub release)"
+        required: true
+        default: false
+        type: boolean
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # required for creating/updating releases and uploading assets
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install 7zip
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y p7zip-full
+
+      - name: Compute release notes from commits since last release
+        id: notes
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const version = '${{ github.event.inputs.version }}';
+            const tagName = `v${version}`;
+
+            let baseTag = null;
+
+            // Try to get the latest release as the base point
+            try {
+              const latest = await github.rest.repos.getLatestRelease({ owner, repo });
+              baseTag = latest.data.tag_name;
+              core.info(`Latest release tag: ${baseTag}`);
+            } catch (error) {
+              if (error.status === 404) {
+                core.info('No previous releases found. Using entire commit history.');
+              } else {
+                throw error;
+              }
+            }
+
+            let commits = [];
+
+            if (baseTag) {
+              // Compare commits between last release tag and HEAD
+              const compare = await github.rest.repos.compareCommits({
+                owner,
+                repo,
+                base: baseTag,
+                head: 'HEAD',
+              });
+              commits = compare.data.commits || [];
+            } else {
+              // No previous release – just list recent commits (up to 100)
+              const list = await github.rest.repos.listCommits({
+                owner,
+                repo,
+                per_page: 100,
+              });
+              commits = list.data || [];
+            }
+
+            if (commits.length === 0) {
+              core.info('No commits found since last release (or in repository).');
+            }
+
+            let body = '';
+            body += `## Version v${version}\n\n`;
+            if (baseTag) {
+              body += `Changes since **${baseTag}**:\n\n`;
+            } else {
+              body += `Initial release notes (no previous releases found):\n\n`;
+            }
+
+            if (commits.length > 0) {
+              body += commits
+                .map(c => {
+                  const message = (c.commit && c.commit.message) ? c.commit.message.split('\n')[0] : '(no message)';
+                  const sha = c.sha ? c.sha.substring(0, 7) : '';
+                  return `- ${message} (${sha})`;
+                })
+                .join('\n');
+            } else {
+              body += '_No commits to list._';
+            }
+
+            core.setOutput('body', body);
+            core.setOutput('tag_name', tagName);
+
+      - name: Create 7z package
+        run: |
+          mkdir -p dist
+          ARCHIVE_NAME="DarktideDiscordRichPresence-${{ github.event.inputs.version }}.7z"
+          7z a -t7z "dist/${ARCHIVE_NAME}" \
+            "./bin" \
+            "./scripts" \
+            "./DarktideDiscordRichPresence.mod"
+          echo "archive_name=${ARCHIVE_NAME}" >> $GITHUB_OUTPUT
+        id: archive
+
+      - name: Dry run summary
+        if: ${{ github.event.inputs.dry_run == 'true' }}
+        run: |
+          echo "Dry run is enabled. No release will be created or updated."
+          echo
+          echo "Tag that would be used: ${{ steps.notes.outputs.tag_name }}"
+          echo "Archive that would be uploaded: dist/${{ steps.archive.outputs.archive_name }}"
+          echo
+          echo "Release notes that would be used:"
+          printf '%s\n' "${{ steps.notes.outputs.body }}"
+          echo
+          echo "Archive contents:"
+          7z l "dist/${{ steps.archive.outputs.archive_name }}"
+
+      - name: Create or update GitHub Release and upload asset
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            const version = '${{ github.event.inputs.version }}';
+            const tagName = '${{ steps.notes.outputs.tag_name }}';
+            const releaseName = `v${version}`;
+            const body = ${{ toJson(steps.notes.outputs.body) }};
+
+            const assetName = '${{ steps.archive.outputs.archive_name }}';
+            const filePath = path.join(process.cwd(), 'dist', assetName);
+
+            core.info(`Using tag: ${tagName}`);
+            core.info(`Release name: ${releaseName}`);
+            core.info(`Asset path: ${filePath}`);
+
+            // Ensure the file exists
+            if (!fs.existsSync(filePath)) {
+              core.setFailed(`Archive file not found: ${filePath}`);
+              return;
+            }
+
+            let release;
+
+            // Try to get existing release by tag
+            try {
+              const existing = await github.rest.repos.getReleaseByTag({
+                owner,
+                repo,
+                tag: tagName,
+              });
+
+              core.info(`Found existing release with ID ${existing.data.id}, updating it...`);
+
+              release = (
+                await github.rest.repos.updateRelease({
+                  owner,
+                  repo,
+                  release_id: existing.data.id,
+                  tag_name: tagName,
+                  name: releaseName,
+                  body,
+                  draft: existing.data.draft,
+                  prerelease: existing.data.prerelease,
+                })
+              ).data;
+            } catch (error) {
+              if (error.status === 404) {
+                core.info('No existing release for this tag. Creating a new release...');
+                release = (
+                  await github.rest.repos.createRelease({
+                    owner,
+                    repo,
+                    tag_name: tagName,
+                    name: releaseName,
+                    body,
+                    draft: false,
+                    prerelease: false,
+                  })
+                ).data;
+              } else {
+                throw error;
+              }
+            }
+
+            core.info(`Release ID: ${release.id}`);
+
+            // Remove any existing asset with the same name
+            const existingAsset = (release.assets || []).find(a => a.name === assetName);
+            if (existingAsset) {
+              core.info(`Deleting existing asset with ID ${existingAsset.id} and name ${existingAsset.name}`);
+              await github.rest.repos.deleteReleaseAsset({
+                owner,
+                repo,
+                asset_id: existingAsset.id,
+              });
+            }
+
+            // Upload new asset
+            const fileData = fs.readFileSync(filePath);
+            const stat = fs.statSync(filePath);
+
+            const uploadUrl = release.upload_url.replace('{?name,label}', `?name=${encodeURIComponent(assetName)}`);
+
+            core.info(`Uploading asset to: ${uploadUrl}`);
+
+            await github.request({
+              method: 'POST',
+              url: uploadUrl,
+              headers: {
+                'content-type': 'application/x-7z-compressed',
+                'content-length': stat.size,
+              },
+              data: fileData,
+            });
+
+            core.info(`Release ready: ${release.html_url}`);
