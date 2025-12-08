@@ -19,8 +19,7 @@ local bin_path = table.concat({
 	"bin",
 }, "\\")
 local bat_path = string.format('"%s\\start-server.bat"', bin_path)
--- mod:notify("Running %s", bat_path)
--- Mods.lua.io.popen(bat_path):close()
+Mods.lua.io.popen(bat_path):close()
 
 mod:notify("Loaded Darktide Discord")
 
@@ -64,6 +63,23 @@ mod:hook_safe(CLASS.MissionBoardView, "on_enter", function (self)
   mod:set_state("state_viewing_missions")
 end)
 
+-- Reset state back to morningstar after exiting
+mod:hook_safe(CLASS.InventoryWeaponsView, "on_exit", function(self)
+  mod:set_state("state_morningstar")
+end)
+
+mod:hook_safe(CLASS.InventoryCosmeticsView, "on_exit", function (self)
+  mod:set_state("state_morningstar")
+end)
+
+mod:hook_safe(CLASS.TalentBuilderView, "on_exit", function(self)
+  mod:set_state("state_morningstar")
+end)
+
+mod:hook_safe(CLASS.MarksVendorView, "on_exit", function (self)
+  mod:set_state("state_morningstar")
+end)
+
 mod:hook(CLASS.StateGameplay, "on_enter", function(func, self, parent, params, creation_context, ...)
 	func(self, parent, params, creation_context, ...)
   mod._mission_name = params.mission_name
@@ -105,17 +121,18 @@ mod.set_state = function (self, state)
   mod._game_state = state
   local state_string = string.format("%s", mod:localize(mod._game_state))
   local details_string = string.format("%s - %s - %s", mod._player_name, mod._player_level, mod:localize(mod._player_archetype))
-  mod:set_discord_state(state_string, details_string)
+  mod:set_discord_state(state_string, details_string, { small_image = mod._player_archetype })
 end
 
-mod.set_discord_state = function(self, state_string, details_string)
+mod.set_discord_state = function(self, state_string, details_string, extra)
   if Managers then
     Managers.backend:url_request("localhost:3923/presence/set", {
       method = "POST",
       body = {
         state = tostring(state_string),
         details = tostring(details_string),
-        large_image = "logo"
+        large_image = extra and extra.large_image or "logo",
+        small_image = extra and extra.small_image
       }
     })
   end
